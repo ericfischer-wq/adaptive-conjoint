@@ -68,111 +68,130 @@ function generateBundles(cardSortData, count = 10) {
   return bundles.slice(0, count)
 }
 
+function generatePairs(bundles) {
+  const pairs = []
+  for (let i = 0; i < bundles.length - 1; i++) {
+    for (let j = i + 1; j < bundles.length; j++) {
+      pairs.push([bundles[i], bundles[j]])
+    }
+  }
+  return pairs
+}
+
 export default function Conjoint({ cardSortData, onComplete, loading }) {
   const [bundles, setBundles] = useState([])
-  const [ratings, setRatings] = useState({})
+  const [pairs, setPairs] = useState([])
+  const [choices, setChoices] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
 
   useEffect(() => {
     const generatedBundles = generateBundles(cardSortData, 10)
     setBundles(generatedBundles)
+    const generatedPairs = generatePairs(generatedBundles)
+    setPairs(generatedPairs)
   }, [cardSortData])
 
-  const handleRating = (bundleIndex, rating) => {
-    setRatings({
-      ...ratings,
-      [bundleIndex]: rating
+  const handleChoice = (pairIndex, bundleIndex) => {
+    setChoices({
+      ...choices,
+      [pairIndex]: bundleIndex
     })
   }
 
-  const allRated = bundles.length > 0 && bundles.every((_, i) => ratings[i] !== undefined)
+  const allAnswered = pairs.length > 0 && pairs.every((_, i) => choices[i] !== undefined)
 
   const handleSubmit = () => {
-    if (allRated) {
-      onComplete(ratings)
+    if (allAnswered) {
+      onComplete(choices)
     }
   }
 
-  if (bundles.length === 0) {
-    return <div>Loading bundles...</div>
+  if (bundles.length === 0 || pairs.length === 0) {
+    return <div>Loading conjoint analysis...</div>
   }
+
+  const currentPair = pairs[currentIndex]
+  const bundleA = currentPair[0]
+  const bundleB = currentPair[1]
 
   return (
     <div>
-      <h1>Step 2: Rate Product Bundles</h1>
-      <p>We've generated product bundles based on your preferences. Rate each bundle on how interested you'd be in a product with those features.</p>
+      <h1>Step 2: Compare Product Bundles</h1>
+      <p>Which bundle would you be more interested in?</p>
 
       <div className={styles.progress}>
         <div className={styles.progressBar}>
           <div
             className={styles.progressFill}
-            style={{ width: `${((currentIndex + 1) / bundles.length) * 100}%` }}
+            style={{ width: `${((currentIndex + 1) / pairs.length) * 100}%` }}
           />
         </div>
-        <span>{currentIndex + 1} of {bundles.length}</span>
+        <span>{currentIndex + 1} of {pairs.length}</span>
       </div>
 
-      <div className={styles.bundleContainer}>
-        <div className={styles.bundle}>
-          <h2>Bundle {currentIndex + 1}</h2>
+      <div className={styles.comparisonContainer}>
+        <div
+          className={`${styles.bundleCard} ${choices[currentIndex] === 0 ? styles.selected : ''}`}
+          onClick={() => handleChoice(currentIndex, 0)}
+        >
+          <h3>Option A</h3>
           <div className={styles.features}>
-            {bundles[currentIndex].map((feature, idx) => (
+            {bundleA.map((feature, idx) => (
               <div key={idx} className={styles.feature}>
                 • {feature}
               </div>
             ))}
           </div>
-
-          <div className={styles.ratingContainer}>
-            <label>How interested would you be in a product with these features?</label>
-            <div className={styles.ratingScale}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                <button
-                  key={num}
-                  className={`${styles.ratingButton} ${ratings[currentIndex] === num ? styles.selected : ''}`}
-                  onClick={() => handleRating(currentIndex, num)}
-                >
-                  {num}
-                </button>
-              ))}
-            </div>
-            <div className={styles.ratingLabels}>
-              <span>Not Interested</span>
-              <span>Very Interested</span>
-            </div>
-          </div>
-
-          <div className={styles.navigation}>
-            <button
-              onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
-              disabled={currentIndex === 0}
-            >
-              ← Previous
-            </button>
-            {currentIndex < bundles.length - 1 && (
-              <button
-                onClick={() => setCurrentIndex(currentIndex + 1)}
-                disabled={ratings[currentIndex] === undefined}
-              >
-                Next →
-              </button>
-            )}
-          </div>
+          {choices[currentIndex] === 0 && <div className={styles.checkmark}>✓</div>}
         </div>
+
+        <div className={styles.vs}>VS</div>
+
+        <div
+          className={`${styles.bundleCard} ${choices[currentIndex] === 1 ? styles.selected : ''}`}
+          onClick={() => handleChoice(currentIndex, 1)}
+        >
+          <h3>Option B</h3>
+          <div className={styles.features}>
+            {bundleB.map((feature, idx) => (
+              <div key={idx} className={styles.feature}>
+                • {feature}
+              </div>
+            ))}
+          </div>
+          {choices[currentIndex] === 1 && <div className={styles.checkmark}>✓</div>}
+        </div>
+      </div>
+
+      <div className={styles.navigation}>
+        <button
+          onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+          disabled={currentIndex === 0}
+        >
+          ← Previous
+        </button>
+        {currentIndex < pairs.length - 1 && (
+          <button
+            onClick={() => setCurrentIndex(currentIndex + 1)}
+            disabled={choices[currentIndex] === undefined}
+          >
+            Next →
+          </button>
+        )}
       </div>
 
       <div style={{ marginTop: '30px', textAlign: 'center' }}>
         <button
           onClick={handleSubmit}
-          disabled={!allRated || loading}
+          disabled={!allAnswered || loading}
           style={{
-            opacity: allRated ? 1 : 0.5,
-            cursor: allRated ? 'pointer' : 'not-allowed'
+            opacity: allAnswered ? 1 : 0.5,
+            cursor: allAnswered ? 'pointer' : 'not-allowed'
           }}
         >
           {loading ? 'Submitting...' : 'Submit Survey'}
         </button>
-        {!allRated && <p style={{ marginTop: '10px', color: '#666' }}>Rate all bundles to submit</p>}
+        {!allAnswered && <p style={{ marginTop: '10px', color: '#666' }}>Answer all comparisons to submit</p>}
       </div>
     </div>
   )

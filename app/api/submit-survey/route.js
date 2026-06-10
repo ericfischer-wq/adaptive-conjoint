@@ -1,22 +1,10 @@
-import { GoogleSpreadsheet } from 'google-spreadsheet'
-import { JWT } from 'google-auth-library'
-
 export async function POST(request) {
   try {
     const data = await request.json()
     const { email, company, cardSort, conjoint, timestamp } = data
 
-    // Initialize Google Sheets with OAuth
-    const doc = new GoogleSpreadsheet(process.env.SHEET_ID)
-
-    const auth = new JWT({
-      email: 'user@example.com',
-      key: 'fake',
-      scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    })
-
-    // Use the refresh token to get a new access token
-    const response = await fetch('https://oauth2.googleapis.com/token', {
+    // Get access token using refresh token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -27,38 +15,52 @@ export async function POST(request) {
       })
     })
 
-    const tokenData = await response.json()
+    const tokenData = await tokenResponse.json()
     if (!tokenData.access_token) {
-      throw new Error('Failed to get access token')
+      throw new Error('Failed to get access token: ' + JSON.stringify(tokenData))
     }
 
-    doc.useApiKey(tokenData.access_token)
-    await doc.loadInfo()
-    const sheet = doc.sheetsByIndex[0]
+    // Get the sheet metadata
+    const sheetsResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SHEET_ID}?fields=sheets.properties`,
+      {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      }
+    )
+    const sheetsData = await sheetsResponse.json()
+    const sheetId = sheetsData.sheets[0].properties.sheetId
 
-    // Flatten data for sheet
-    const row = {
+    // Build the row values
+    const rowValues = [
       timestamp,
       email,
-      company,
-      baseline: (cardSort.baseline || []).join('; '),
-      intermediate: (cardSort.intermediate || []).join('; '),
-      premium: (cardSort.premium || []).join('; '),
-      notRelevant: (cardSort['not-relevant'] || []).join('; '),
-      bundle1Rating: conjoint[0] || '',
-      bundle2Rating: conjoint[1] || '',
-      bundle3Rating: conjoint[2] || '',
-      bundle4Rating: conjoint[3] || '',
-      bundle5Rating: conjoint[4] || '',
-      bundle6Rating: conjoint[5] || '',
-      bundle7Rating: conjoint[6] || '',
-      bundle8Rating: conjoint[7] || '',
-      bundle9Rating: conjoint[8] || '',
-      bundle10Rating: conjoint[9] || '',
-      avgRating: Object.values(conjoint).reduce((a, b) => a + b, 0) / Object.keys(conjoint).length
-    }
+      company || '',
+      (cardSort.baseline || []).join('; '),
+      (cardSort.intermediate || []).join('; '),
+      (cardSort.premium || []).join('; '),
+      (cardSort['not-relevant'] || []).join('; '),
+      JSON.stringify(conjoint)
+    ]
 
-    await sheet.addRow(row)
+    // Append row to sheet
+    const appendResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SHEET_ID}/values/Sheet1!A:H:append?valueInputOption=USER_ENTERED`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokenData.access_token}`
+        },
+        body: JSON.stringify({
+          values: [rowValues]
+        })
+      }
+    )
+
+    if (!appendResponse.ok) {
+      const error = await appendResponse.json()
+      throw new Error('Failed to append to sheet: ' + JSON.stringify(error))
+    }
 
     return Response.json({ success: true })
   } catch (error) {
