@@ -30,7 +30,7 @@ const CAPABILITIES = [
   'Audit Trails'
 ]
 
-function generateBundles(cardSortData, count = 10) {
+function generateBundles(cardSortData, count = 15) {
   const baseline = cardSortData.baseline || []
   const intermediate = cardSortData.intermediate || []
   const premium = cardSortData.premium || []
@@ -75,7 +75,8 @@ function generatePairs(bundles) {
       pairs.push([bundles[i], bundles[j]])
     }
   }
-  return pairs
+  // Shuffle and limit to 15 pairs for testing
+  return pairs.sort(() => Math.random() - 0.5).slice(0, 15)
 }
 
 export default function Conjoint({ cardSortData, onComplete, loading }) {
@@ -85,7 +86,7 @@ export default function Conjoint({ cardSortData, onComplete, loading }) {
   const [currentIndex, setCurrentIndex] = useState(0)
 
   useEffect(() => {
-    const generatedBundles = generateBundles(cardSortData, 10)
+    const generatedBundles = generateBundles(cardSortData, 15)
     setBundles(generatedBundles)
     const generatedPairs = generatePairs(generatedBundles)
     setPairs(generatedPairs)
