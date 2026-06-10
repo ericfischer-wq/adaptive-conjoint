@@ -20,16 +20,6 @@ export async function POST(request) {
       throw new Error('Failed to get access token: ' + JSON.stringify(tokenData))
     }
 
-    // Get the sheet metadata
-    const sheetsResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SHEET_ID}?fields=sheets.properties`,
-      {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` }
-      }
-    )
-    const sheetsData = await sheetsResponse.json()
-    const sheetId = sheetsData.sheets[0].properties.sheetId
-
     // Build the row values
     const rowValues = [
       timestamp,
@@ -44,7 +34,7 @@ export async function POST(request) {
 
     // Append row to sheet
     const appendResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SHEET_ID}/values/Sheet1!A:H:append?valueInputOption=USER_ENTERED`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${process.env.SHEET_ID}/values/Sheet1!A1:append?valueInputOption=USER_ENTERED`,
       {
         method: 'POST',
         headers: {
@@ -57,9 +47,10 @@ export async function POST(request) {
       }
     )
 
+    const appendData = await appendResponse.json()
+
     if (!appendResponse.ok) {
-      const error = await appendResponse.json()
-      throw new Error('Failed to append to sheet: ' + JSON.stringify(error))
+      throw new Error('Failed to append to sheet: ' + JSON.stringify(appendData))
     }
 
     return Response.json({ success: true })
