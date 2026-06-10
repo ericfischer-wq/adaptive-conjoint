@@ -1,63 +1,52 @@
-// In-memory storage (clears on redeploy, but fine for testing)
-let responses = []
+import { google } from 'googleapis'
 
 export async function POST(request) {
   try {
     const data = await request.json()
     const { email, company, cardSort, conjoint, timestamp } = data
 
-    // Store response
-    responses.push({
+    // Use the refresh token to get a new access token
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      'http://localhost' // redirect URI (not used for refresh token flow)
+    )
+
+    oauth2Client.setCredentials({
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+    })
+
+    const { credentials } = await oauth2Client.refreshAccessToken()
+    const accessToken = credentials.access_token
+
+    // Create sheets API client
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client })
+
+    // Prepare row data
+    const rowValues = [[
       timestamp,
       email,
-      company,
-      baseline: (cardSort.baseline || []).join('; '),
-      intermediate: (cardSort.intermediate || []).join('; '),
-      premium: (cardSort.premium || []).join('; '),
-      notRelevant: (cardSort['not-relevant'] || []).join('; '),
-      conjointChoices: conjoint
-    })
+      company || '',
+      (cardSort.baseline || []).join('; '),
+      (cardSort.intermediate || []).join('; '),
+      (cardSort.premium || []).join('; '),
+      (cardSort['not-relevant'] || []).join('; '),
+      JSON.stringify(conjoint)
+    ]]
 
-    console.log(`Stored response from ${email}. Total responses: ${responses.length}`)
-
-    return Response.json({ success: true, totalResponses: responses.length })
-  } catch (error) {
-    console.error('Error submitting survey:', error)
-    return Response.json(
-      { error: error.message },
-      { status: 500 }
-    )
-  }
-}
-
-export async function GET() {
-  try {
-    // Return as CSV
-    if (responses.length === 0) {
-      return Response.json({ message: 'No responses yet' })
-    }
-
-    const headers = ['timestamp', 'email', 'company', 'baseline', 'intermediate', 'premium', 'notRelevant', 'conjointChoices']
-    const rows = responses.map(r => [
-      r.timestamp,
-      r.email,
-      r.company,
-      `"${r.baseline}"`,
-      `"${r.intermediate}"`,
-      `"${r.premium}"`,
-      `"${r.notRelevant}"`,
-      `"${JSON.stringify(r.conjointChoices).replace(/"/g, '""')}"`
-    ])
-
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n')
-
-    return new Response(csv, {
-      headers: {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': 'attachment; filename="survey-responses.csv"'
+    // Append to sheet
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.SHEET_ID,
+      range: 'Sheet1!A:H',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: rowValues
       }
     })
+
+    return Response.json({ success: true })
   } catch (error) {
+    console.error('Error submitting survey:', error)
     return Response.json(
       { error: error.message },
       { status: 500 }
