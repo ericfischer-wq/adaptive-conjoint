@@ -29,7 +29,16 @@ export default function Home() {
 
   const handleConjointComplete = async (conjointData) => {
     setLoading(true)
+    setError('')
     try {
+      console.log('Submitting survey:', {
+        email,
+        company,
+        cardSort: cardSortData,
+        conjoint: conjointData,
+        timestamp: new Date().toISOString()
+      })
+
       const response = await fetch('/api/submit-survey', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -42,9 +51,16 @@ export default function Home() {
         })
       })
 
-      if (!response.ok) throw new Error('Failed to submit')
+      const responseData = await response.json()
+      console.log('Response:', responseData)
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Failed to submit')
+      }
+
       setStage('complete')
     } catch (err) {
+      console.error('Error:', err)
       setError('Error submitting survey: ' + err.message)
       setLoading(false)
     }
@@ -94,6 +110,7 @@ export default function Home() {
             onComplete={handleConjointComplete}
             loading={loading}
           />
+          {error && <div className="error">{error}</div>}
         </div>
       )}
 
